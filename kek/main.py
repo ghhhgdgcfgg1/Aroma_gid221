@@ -663,7 +663,7 @@ async def fav_navigation(callback: CallbackQuery):
     action, index = callback.data.split("_")[1:]
     index = int(index)
 
-    items = [p for p in perfumes if p["id"] in user_favorites.get(uid, [])]
+    items = [p for p in perfumes if p["id"] in user_favorites.get(uid, set())]
 
     if not items:
         await callback.answer()
@@ -676,14 +676,32 @@ async def fav_navigation(callback: CallbackQuery):
 
     perfume = items[index]
 
-    await callback.message.edit_media(
-        media=InputMediaPhoto(
-            media=FSInputFile(perfume["photo"]),
-            caption=f"<b>{perfume['name']}</b>",
-            parse_mode="HTML"
-        ),
-        reply_markup=favorites_keyboard(index, len(items), uid)
+    # ✅ используем тот же ресайз, что и в "Избранном"
+    framed_photo = await resize_photo(perfume["photo"])
+
+    caption = (
+        f"<b>{perfume['name']}</b>\n"
+        f"Пол: {perfume.get('category','не указано')}\n"
+        f"Объём: {perfume.get('volume','не указано')}"
     )
+
+    try:
+        await callback.message.edit_media(
+            media=InputMediaPhoto(
+                media=framed_photo,
+                caption=caption,
+                parse_mode="HTML"
+            ),
+            reply_markup=favorites_keyboard(index, len(items), uid)
+        )
+    except TelegramBadRequest:
+        # если нельзя отредактировать — отправим новое
+        await callback.message.answer_photo(
+            photo=framed_photo,
+            caption=caption,
+            reply_markup=favorites_keyboard(index, len(items), uid),
+            parse_mode="HTML"
+        )
 
     await callback.answer()
 
